@@ -191,6 +191,39 @@ In this version of the client, we've added a `query_record()` method that elimin
 
 With just a little more code than in the quick-and-dirty version, we have a more semantically friendly API client. The goal of this framework is to let you easily implement REST objects in the Python domain that have features like rich typing, default values, or anything else you can do with Python.
 
+## Exceptions
+
+Other than Python built-in exceptions, all exceptions raised by `rest_client_framework` are defined in `rest_client_framework.exceptions`. The base class for all of these is `RuntimeError`. The class hierarchy is as follows:
+
+```
+RuntimeError
+ +-- RestRuntimeError
+      +-- ServiceResponseError
+      +-- MaximumAttemptsExceeded
+ +-- ConfigurationError
+      +-- WebServiceDefinitionError
+      +-- RestDefinitionError
+           +-- AttributeCollisionError
+           +-- AmbiguousDatetimeFormatError
+           +-- AmbiguousOrderedSequenceError
+```
+
+### `ServiceResponseError`
+
+This is the error raised by `rest_client_framework.Client` when the remote service responds with an HTTP status of 400 or greater.
+
+### `MaximumAttemptsExceeded`
+
+This is the error raised by `rest_client_framework.Client` after retrying a failing request the maximum allowable number of times without receiving a successful response.
+
+### `WebServiceDefinitionError`
+
+This error is raised when the user attempts to extend certain base classes without providing required configuration values.
+
+### `RestDefinitionError`
+
+This is the common base class for several more specific errors that may result from misconfiguration of `rest_client_framework.rest.RestObject` subclasses.
+
 ## The `Client` class
 
 The `rest_client_framework.client.Client` class handles the mechanics of issuing requests and receiving responses.
@@ -933,3 +966,115 @@ Converts the instance to REST representation. Internally, this method activates 
 #### `set_excluded_properties(*names)`
 
 This method is the non-contextual equivalent of the `exclude_properties()` context manager.
+
+### Inheritance
+
+The configuration resolution in the `RestObject` class offers full support for inheritance. Classes descending from concrete `RestObject` subclasses will respect parents' `property_map` configurations as well as their own. Depending on their types, values in the configuration will either override or be merged with those from their parent class(es). Consider the following two class definitions:
+
+```python
+class ParentRestObject(RestObject):
+    property_map = {
+        RestObject.__defaults__: {
+            'lumberjack_status': 'ok'
+        },
+        RestObject.__order__: ['monty', 'lumberjackStatus'],
+        'monty': 'my_attribute_name',
+        'cheeseTypes': None,
+        'parrot': {
+            RestObject.__defaults__: {
+                'pinesFor': 'Oslo'
+            },
+            'breed': None,
+            'plumage': 'feathers',
+            'pinesFor': None
+        },
+        'lumberjackStatus': None
+    }
+
+class ChildRestObject(ParentRestObject):
+    property_map = {
+        RestObject.__defaults__: {
+            'cheeseTypes': ['Wensleydale']
+        },
+        RestObject.__order__: ['lumberjackStatus', 'nightActivity', 'dayActivity'],
+        'nightActivity': None,
+        'dayActivity': None
+    }
+
+    @property
+    def day_activity(self):
+        return self._day_activity
+
+    @day_activity.setter
+    def day_activity(self, value):
+        self._day_activity = value
+        print("""I'm a lumberjack and I'm {}
+I {} all night and I {} all day
+""".format(self.lumberjack_status, self.night_activity, self.day_activity))
+```
+
+```
+>>> obj = ChildRestObject(nightActivity='sleep', dayActivity='work', parrot={
+...     'pinesFor': 'Saskatchewan'
+... })
+I'm a lumberjack and I'm ok
+I sleep all night and I work all day
+
+>>> obj.cheese_types
+['Wensleydale']
+>>> obj.my_attribute_name
+>>> obj.pines_for
+'Saskatchewan'
+```
+
+Instances of `ChildRestObject` will have all the attributes defined in `ParentRestObject`'s configuration, plus several others. `ChildRestObject` will apply a default value during instantiation not only for `cheeseTypes`/`cheese_types`, but also `lumberjackStatus`/`lumberjack_status`. Because of the nature of the `RestObject.__order__` configuration attribute, the internal configuration mechanism attempts to compute a merged result that respects the preferences of both the parent and the child; in this case, the ultimate order is `['monty', 'lumberjackStatus', 'nightActivity', 'dayActivity']`. If a child configuration specifies an order incompatible with the parent, an error is raised:
+
+```python
+class ParentRestObject(RestObject):
+    property_map = {
+        RestObject.__defaults__: {
+            'lumberjack_status': 'ok'
+        },
+        RestObject.__order__: ['monty', 'lumberjackStatus'],
+        'monty': 'my_attribute_name',
+        'cheeseTypes': None,
+        'parrot': {
+            RestObject.__defaults__: {
+                'pinesFor': 'Oslo'
+            },
+            'breed': None,
+            'plumage': 'feathers',
+            'pinesFor': None
+        },
+        'lumberjackStatus': None
+    }
+
+class ChildRestObject(ParentRestObject):
+    property_map = {
+        RestObject.__defaults__: {
+            'cheeseTypes': ['Wensleydale']
+        },
+        RestObject.__order__: ['lumberjackStatus', 'nightActivity', 'monty'],
+        'nightActivity': None,
+        'dayActivity': None
+    }
+```
+
+```
+Traceback (most recent call last):
+  File "/rest_client_framework/rest.py", line 366, in resolve_property_map
+    new_class._resolved_property_map[meta_key] = cls.merge_ordered_sequences(
+  File "/rest_client_framework/rest.py", line 186, in merge_ordered_sequences
+    raise AmbiguousOrderedSequenceError(metadata_key)
+rest_client_framework.exceptions.AmbiguousOrderedSequenceError: __order__
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+  File "/rest_client_framework/rest.py", line 83, in __new__
+    cls.resolve_property_map(new_class)
+  File "/rest_client_framework/rest.py", line 370, in resolve_property_map
+    raise RestDefinitionError(
+rest_client_framework.exceptions.RestDefinitionError: Could not merge ChildRestObject.__order__ with parents due to order conflict.
+```

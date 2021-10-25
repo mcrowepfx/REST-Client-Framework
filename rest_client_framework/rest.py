@@ -1,9 +1,28 @@
+# Copyright 2021 Performics
+#
+# This file is part of rest-client-framework.
+#
+# rest-client-framework is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# rest-client-framework is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with rest-client-framework.  If not, see <https://www.gnu.org/licenses/>.
+
 import logging, re
 from contextlib import contextmanager
 from copy import copy, deepcopy
 from datetime import datetime
 from importlib import import_module
 from .datastructures import unpack_flat_structure
+from .exceptions import (AmbiguousDatetimeFormatError,
+    AmbiguousOrderedSequenceError, AttributeCollisionError, RestDefinitionError)
 
 logger = logging.getLogger(__name__)
 # This pattern is borrowed from django.utils.text
@@ -18,21 +37,6 @@ def camel_case_to_python(value):
         # the regex substitution to fail.
         pass
     return re_camel_case.sub(r'_\1', value).lower()
-
-class AmbiguousOrderedSequenceError(ValueError):
-    pass
-
-class RestDefinitionError(RuntimeError):
-    pass
-
-class AttributeCollisionError(RestDefinitionError):
-    def __init__(self, attr_name, *rest_paths):
-        super().__init__('Multiple REST properties map to the attribute "{}" ({}).'.format(
-            attr_name, ', '.join(str(p) for p in rest_paths)
-        ))
-
-class AmbiguousDatetimeFormatError(RuntimeError):
-    pass
 
 class AttributeInfo:
     def __init__(self, *, rest_property_path=None, expected_type=None, default_value=None):
@@ -408,13 +412,11 @@ class RestObject(metaclass=RestObjectMetaclass):
 
     def __init__(self, **kwargs):
         self._attr_datetime_formats = {}
-        set_attrs = self._set_data(kwargs or {}, self._resolved_property_map)
-        # Set the defaults that didn't receive an explicit value
-        for attr, attr_info in filter(
-            lambda item: item[0] not in set_attrs and item[1].default_value is not None,
+        defaults = {attr: attr_info.default_value for attr, attr_info in filter(
+            lambda item: item[1].default_value is not None,
             self._reversed_property_map.items()
-        ):
-            setattr(self, attr, attr_info.default_value)
+        )}
+        self._set_data(kwargs or {}, self._resolved_property_map, defaults)
         # Where necessary, getters can check the value of this flag (which is
         # set by the _as_rest() context manager) to vary their output.
         self.__rest__ = False
@@ -504,7 +506,7 @@ class RestObject(metaclass=RestObjectMetaclass):
         except KeyError:
             pass
 
-    def _set_data(self, data, node):
+    def _set_data(self, data, node, defaults):
         """
         Sets properties from ``data`` as defined in ``node``, one level at a
         time, and returns a list containing the attribute names that were set
@@ -534,8 +536,15 @@ class RestObject(metaclass=RestObjectMetaclass):
                             key, val.__class__.__name__
                         )
                     )
-                set_attrs += self._set_data(val, node[key])
+                set_attrs += self._set_data(val, node[key], defaults)
             else:
+                if not got_explicit_value:
+                    try:
+                        val = defaults[attr_name]
+                    except KeyError:
+                        pass
+                    else:
+                        got_explicit_value = True
                 setattr(self, attr_name, val)
                 if got_explicit_value:
                     set_attrs.append(attr_name)

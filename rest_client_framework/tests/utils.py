@@ -1,3 +1,20 @@
+# Copyright 2021 Performics
+#
+# This file is part of rest-client-framework.
+#
+# rest-client-framework is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# rest-client-framework is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with rest-client-framework.  If not, see <https://www.gnu.org/licenses/>.
+
 import requests
 from rest_client_framework.request import Request
 

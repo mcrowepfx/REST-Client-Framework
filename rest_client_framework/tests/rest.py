@@ -253,12 +253,13 @@ class RestObjectTestCase(TestCase):
             'contained_property',
             'set_me_first',
             'deep_property',
+            'some_property',
             'bar_attribute'
         })
         bar = self.Bar(someProperty=False)
         self.assertIs(bar.some_property, False)
         self.assertEqual(bar.bar_attribute, 'hello')
-        self.assertEqual(bar.set_attrs, ['some_property'])
+        self.assertEqual(set(bar.set_attrs), {'some_property', 'bar_attribute'})
         with self.assertRaises(TypeError):
             self.Bar(someOtherProperty=[])
 
@@ -690,6 +691,20 @@ class RestObjectTestCase(TestCase):
                 'second_member',
                 'first_member'
             ]
+        )
+        # somePropertyUniqueToThisClass/bar_attribute has a default, so if we
+        # don't specify it in the constructor arguments, it should still be set
+        # in the expected order.
+        obj = Baz(container={
+            'containedProperty': 'foo'
+        }, someOtherProperty={
+            'firstMember': 123,
+            'secondMember': 456
+        })
+        self.assertEqual(obj.bar_attribute, 'hello')
+        self.assertLess(
+            obj.set_attrs.index('bar_attribute'),
+            obj.set_attrs.index('contained_property')
         )
         # To complicate things, we'll subclass the preceding class, use a
         # different name for the property in the first position, and add a
