@@ -5,7 +5,7 @@ from rest_client_framework.client import NoOpTransport, Client as BaseClient
 from rest_client_framework.exceptions import ServiceResponseError, MaximumAttemptsExceeded
 from rest_client_framework.request import Request
 from rest_client_framework.response import Response
-from .utils import get_mock_response
+from rest_client_framework.test_utils import get_mock_response
 
 class Client(BaseClient):
     """

@@ -5,7 +5,7 @@ from rest_client_framework.request import Request
 from rest_client_framework.response import (JsonRestResponse,
     JsonSequenceRestResponse, CachingJsonSequenceRestResponse)
 from rest_client_framework.rest import RestObject
-from .utils import get_mock_response
+from rest_client_framework.test_utils import get_mock_response
 
 class TestClient(Client):
     base_url = 'https://some.test.service'
