@@ -506,6 +506,10 @@ class RestObject(metaclass=RestObjectMetaclass):
         except KeyError:
             pass
 
+    @classmethod
+    def hasattr(cls, attr):
+        return attr in cls._reversed_property_map
+
     def _set_data(self, data, node, defaults):
         """
         Sets properties from ``data`` as defined in ``node``, one level at a
